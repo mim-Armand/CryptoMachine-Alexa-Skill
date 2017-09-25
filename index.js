@@ -1,10 +1,15 @@
 /* eslint-disable  func-names */
 /* eslint quote-props: ["error", "consistent"]*/
 
+// We can use either of the following APIs:
+// https://www.cryptonator.com/api/
+// https://www.cryptocompare.com/api
+
 'use strict';
 
 const Alexa = require('alexa-sdk');
 const https = require('https');
+const coins = require('./coins');
 
 const languageStrings = {
     'en': {
@@ -18,27 +23,28 @@ const languageStrings = {
     },
 };
 
+const helloMessages = [
+    "Hi, how can I help you today?",
+    "Hello! let me know what you'd like to know in crypto-market?",
+    "Hey bud! which coin you want to know the price for?",
+    "Hello sunshine? pick a crypto currency coin so I get its status for ya!",
+    "Welcome! Which coin you are interested in?",
+    "Yo! What coin?!"
+]
+const reprompMessages = [
+    "What coin would you like to know the price about?",
+    "You didn't say which coin!",
+    "Try something like Bitcoin or Ethereum!",
+    "So what is you coin of choice?",
+    "You got to let me know which coin!"
+]
+const unrecognisedResponses = [
+    "Say whaaaaat! sorry but I didn't underestand what you said!",
+    "What coin was that again?",
+    "I'm not sure if that's even a coin! May you say it again?",
+    "What was that?!"
+]
 
-const TestResponse = {
-  "version": "1.0",
-  "response": {
-    "outputSpeech": {
-      "type": "PlainText",
-      "text": "Error! ",
-    },
-    "card": {
-      "type": "Standard",
-      "title": "Crypto Machine!",
-      "content": "string",
-      "text": "Error! ",
-      "image": {
-        "smallImageUrl": "https://s3.amazonaws.com/cryptomachine/mim-btc-coinbase-wallet.png",
-        "largeImageUrl": "https://s3.amazonaws.com/cryptomachine/mim-btc-coinbase-wallet.png"
-      }
-    },
-    "shouldEndSession": true
-  }
-}
 
 
 const APP_ID = 'amzn1.ask.skill.239cad52-325b-4141-aa6e-a3923ebd7f65';
@@ -48,21 +54,46 @@ let hello_message = ''
 const handlers = {
     'LaunchRequest': function () {
         console.log('======================== LaunchRequest')
-        hello_message = 'Hi, here is a quick briefing of the market: '
-        this.emit('GetPricesAll');
+        this.attributes.speechOutput = helloMessages[ randomInRange(0, helloMessages.length) ];
+        this.attributes.repromptSpeech = reprompMessages[ randomInRange(0, reprompMessages.length)];
+        this.response.speak(this.attributes.speechOutput).listen(this.attributes.repromptSpeech);
+        this.emit(':responseReady');
     },
-    'GetPricesAll': function () {
-        console.log('======================== GetPricesAll')
-        TestResponse.response.outputSpeech.text = hello_message;
+    'RepromptRequest': function(){
+        this.attributes.repromptSpeech = reprompMessages[ randomInRange(0, reprompMessages.length)];
+        this.response.speak( this.attributes.repromptSpeech ).listen( this.attributes.repromptSpeech );
+        this.emit(':responseReady');
+    },
+    'GetPrice': function(){
+        console.log('======================== GetPrice', this.event.request.intent.slots.cointype)
+        let slot = this.event.request.intent.slots.cointype.value.toLowerCase();
+        let sym;
+        if( coins.syms.indexOf( slot ) !== -1 ){
+            sym = slot;
+        } else if ( coins.name.indexOf( slot ) !== -1 ){
+            sym = coins.syms [ coins.name.indexOf( slot ) ]
+        } else this.emit('WrongCoin');
+        this.attributes.speechOutput = slot;
+        this.response.speak(this.attributes.speechOutput); //todo: check if we need to listen here?!
+        this.emit(':responseReady');
+    },
+    'WrongCoin': function(){
+        this.response.speak("Coin " + this.event.request.intent.slots.cointype.value + " does not exist in my database! please try a different coin!").listen();
+        this.emit(':responseReady');
     },
     'Unhandled': function () {
         console.log('======================== Unhandled')
-        this.emit('GetPricesAll');
+        this.attributes.unrecognizedSpeech = unrecognisedResponses[ randomInRange(0, unrecognisedResponses.length) ];
+        this.response.speak( this.attributes.unrecognizedSpeech ).listen( this.attributes.repromptSpeech );
+        this.emit('RepromptRequest');
     },
     'AMAZON.HelpIntent': function () {
         const speechOutput = this.t('HELP_MESSAGE');
         const reprompt = this.t('HELP_MESSAGE');
         this.emit(':ask', speechOutput, reprompt);
+    },
+    'AMAZON.RepeatIntent': function () {
+
     },
     'AMAZON.CancelIntent': function () {
         this.emit(':tell', this.t('STOP_MESSAGE'));
@@ -74,113 +105,15 @@ const handlers = {
 };
 
 
-const SupportedCoins = [ 'BTC' , 'ETH', 'LTC' ]
-
-const SupportedCoinsNames = [ 'BitCoin', 'Ethereum', 'LiteCoin']
-
-const fetchPrice = function ( coin, index, callback ){
-    let req_options = { 
-            host:  'api.coinbase.com', 
-            path: '/v2/prices/'+ coin +'-USD/spot', 
-            port: 443,
-            method: 'GET'};
-    var post_req = https.request(req_options, function(res) { 
-            res.setEncoding('utf8'); 
-            var returnData = ""; 
-            res.on('data', function (chunk) { 
-                returnData += chunk; 
-            }); 
-            res.on('end', function () {
-                callback( JSON.parse(returnData).data, index )
-            }); 
-           });
-                 post_req.end();
-}
-
-const fetchPrices = function (event, context){
-    hello_message = '';
-    if( !event.request.intent ) event.request.intent = {name: 'GetPricesAll'}
-    let requestedCoins = [];
-    switch ( event.request.intent.name ){
-        case 'GetPricesAll':
-        console.log(" ------> Get ALL Prices <--------- ")
-            requestedCoins = SupportedCoins;
-        break;
-        case 'GetPrice':
-            let _coinType = (event.request.intent.slots.Coin_Type.value).toUpperCase();
-
-            _coinType = (_coinType == 'BITCOIN' || _coinType == 'BIT-COIN') ? 'BTC' : _coinType;
-            _coinType = (_coinType == 'ETHER' || _coinType == 'ETHEREUM') ? 'ETH' : _coinType;
-            _coinType = (_coinType == 'LITECOIN' || _coinType == 'LITE-COIN') ? 'LTC' : _coinType;
-
-             let all_synonyms = [ 'coins', 'everything', 'all', 'anything', 'market', 'whole' ]
-            if(all_synonyms.indexOf( _coinType.toLowerCase() ) !== -1 ) {
-                requestedCoins = SupportedCoins;
-                break;
-            }
-
-            console.log(' [ [ [ [ [ [ [ [ ', SupportedCoins.indexOf( _coinType) === -1, ' ] ] ] ] ] ] ]  ] ]')
-
-            if( SupportedCoins.indexOf( _coinType ) === -1){ // we indicate that the coin name is not valid and return all coins prices
-                TestResponse.response.outputSpeech.text += `Requested coin, ${_coinType}, was not recognized! here are the supported coins and their current valuse: `;
-                requestedCoins = SupportedCoins;
-            }else{
-                requestedCoins = [`${_coinType}`]
-            }
-            console.log('\n - - - - - - - - - - - - - - -\n')
-            console.log(_coinType)
-            console.log('\n - - - - - - - - - - - - - - -\n')
-        break;
-        fedault:
-        requestedCoins = SupportedCoins;
-        // context.succeed('default!')
-    }
-
-    let responses = [];
-    let counter = 0;
-
-    for (var i = 0; i < requestedCoins.length; i ++ ) {
-        fetchPrice( 
-            requestedCoins[i],
-            i,
-            function(d, index){
-                counter++;
-                responses[ index ] = d;
-                 if (counter == requestedCoins.length ) say( context, responses, requestedCoins )
-                }
-            )
-    }
-                
-}
-
-const say = function( context, data, requestedCoins ){
-    console.log('********************* easy speak! *********************', data)
-    let responseText = "";
-    for( let i = 0; i < data.length; i ++ ){
-        let coinName = SupportedCoinsNames[ SupportedCoins.indexOf( (requestedCoins[i]).toUpperCase() ) ]
-        responseText += `The price of ${coinName} is ${data[i].amount} ${data[i].currency}! `
-    }
-    TestResponse.response.outputSpeech.text += responseText;
-    TestResponse.response.card.text = `Prices for:\n ${requestedCoins.join(" - ")} \n\r [ mim Armand ]`;
-    context.succeed(TestResponse);
+const randomInRange =  function(min, max){
+    return Math.floor((Math.random() * (max - min) + min));
 }
 
 exports.handler = function (event, context) {
-    console.log("\n=========================================\n")
-    console.log("\n=========================================\n")
-    console.log(event)
-    console.log("\n=========================================\n")
-    console.log(event.request.intent)
-    // console.log(event.request.ResolvedAnaphorList)
-    console.log("\n=========================================\n")
-    console.log("\n=========================================\n")
     const alexa = Alexa.handler(event, context);
     alexa.APP_ID = APP_ID;
     // To enable string internationalization (i18n) features, set a resources object.
     alexa.resources = languageStrings;
     alexa.registerHandlers(handlers);
     alexa.execute();
-
-    fetchPrices ( event, context );
-    // context.succeed(TestResponse);
 };
