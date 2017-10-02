@@ -12,7 +12,7 @@ const helloMessages = require('./msg_greetings').messages;
 const reprompMessages = require('./msg_reprompt').messages;
 const unrecognisedResponses = require('./msg_unrecognized').messages;
 
-const APP_ID = 'amzn1.ask.skill.239cad52-325b-4141-aa6e-a3923ebd7f65';
+const APP_ID = process.env.APP_ID;
 let hello_message = ''
 const handlers = {
     'LaunchRequest': function() {
