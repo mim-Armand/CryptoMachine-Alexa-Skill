@@ -8,20 +8,10 @@
 const Alexa = require('alexa-sdk');
 const https = require('https');
 const coins = require('./coins');
-const languageStrings = {
-    'en': {
-        translation: {
-            SKILL_NAME: 'Crypto Machine',
-            GET_ALL_PRICES_MESSAGE: "The prices are as follow: ",
-            HELP_MESSAGE: 'Ask me for the prices of all currencies or one of them!',
-            HELP_REPROMPT: 'What can I help you with?',
-            STOP_MESSAGE: 'Goodbye!',
-        },
-    },
-};
-const helloMessages = ["Hi, how can I help you today?", "Hello! let me know what you'd like to know in crypto-market?", "Hey bud! which coin you want to know the price for?", "Hello sunshine? pick a crypto currency coin so I get its status for ya!", "Welcome! Which coin you are interested in?", "Yo! What coin?!"]
-const reprompMessages = ["What coin would you like to know the price about?", "You didn't say which coin!", "Try something like Bitcoin or Ethereum!", "So what is you coin of choice?", "You got to let me know which coin!"]
-const unrecognisedResponses = ["Say whaaaaat! sorry but I didn't underestand what you said!", "What coin was that again?", "I'm not sure if that's even a coin! May you say it again?", "What was that?!"]
+const helloMessages = require('./msg_greetings').messages;
+const reprompMessages = require('./msg_reprompt').messages;
+const unrecognisedResponses = require('./msg_unrecognized').messages;
+
 const APP_ID = 'amzn1.ask.skill.239cad52-325b-4141-aa6e-a3923ebd7f65';
 let hello_message = ''
 const handlers = {
@@ -39,6 +29,7 @@ const handlers = {
     },
     'GetPrice': function() {
         console.log('======================== GetPrice', this.event.request.intent.slots.cointype)
+        if( !this.event.request.intent.slots.cointype.value ) this.emit('AMAZON.HelpIntent')
         let slot = this.event.request.intent.slots.cointype.value.toLowerCase();
         let sym, name;
         if (coins.syms.indexOf(slot) !== -1) {
@@ -51,6 +42,14 @@ const handlers = {
         fetchPrice(sym).then((d) => {
             this.attributes.speechOutput = `The price of ${name} is $${d.USD}`;
             this.response.speak(this.attributes.speechOutput);
+            this.response.cardRenderer(
+                `${sym.toUpperCase()}. © mim.Armand`,
+                ` ${name.charAt(0).toUpperCase()}${name.slice(1)} (${sym.toUpperCase()}) : $${d.USD}`
+                // {
+                //     smallImageUrl: `https://www.cryptocompare.com/media/${coins.imgs[ coins.syms.indexOf(sym) ]}`,
+                //     largeImageUrl: `https://www.cryptocompare.com/media/${coins.imgs[ coins.syms.indexOf(sym) ]}`
+                // }
+            );
             this.emit(':responseReady');
         })
     },
@@ -65,17 +64,16 @@ const handlers = {
         this.emit('RepromptRequest');
     },
     'AMAZON.HelpIntent': function() {
-        const speechOutput = this.t('HELP_MESSAGE');
-        const reprompt = this.t('HELP_MESSAGE');
+        const speechOutput = "Ask me for the price of a cryptocurrency coin, like Bitcoin or Ethereum!";
+        const reprompt = "Ask something like: what is the price of Ethereum?!";
         this.emit(':ask', speechOutput, reprompt);
     },
-    'AMAZON.RepeatIntent': function() {},
     'AMAZON.CancelIntent': function() {
-        this.emit(':tell', this.t('STOP_MESSAGE'));
+        this.emit(':tell', "Cool!");
     },
     'AMAZON.StopIntent': function() {
         hello_message = '';
-        this.emit(':tell', this.t('STOP_MESSAGE'));
+        this.emit(':tell', "See ya!");
     },
 };
 const fetchPrice = function(coin) {
@@ -99,7 +97,7 @@ exports.handler = function(event, context) {
     const alexa = Alexa.handler(event, context);
     alexa.APP_ID = APP_ID;
     // To enable string internationalization (i18n) features, set a resources object.
-    alexa.resources = languageStrings;
+    // alexa.resources = languageStrings;
     alexa.registerHandlers(handlers);
     alexa.execute();
 };
