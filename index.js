@@ -1,5 +1,7 @@
 /* eslint-disable  func-names */
 /* eslint quote-props: ["error", "consistent"]*/
+/* jshint node: true */
+/*jshint esversion: 6 */
 // We can use either of the following APIs:
 // https://coinmarketcap.com/api/
 // https://www.cryptonator.com/api/
@@ -13,10 +15,10 @@ const reprompMessages = require('./msg_reprompt').messages;
 const unrecognisedResponses = require('./msg_unrecognized').messages;
 
 const APP_ID = process.env.APP_ID;
-let hello_message = ''
+let hello_message = '';
 const handlers = {
     'LaunchRequest': function() {
-        console.log('======================== LaunchRequest')
+        console.log('======================== LaunchRequest');
         this.attributes.speechOutput = helloMessages[randomInRange(0, helloMessages.length)];
         this.attributes.repromptSpeech = reprompMessages[randomInRange(0, reprompMessages.length)];
         this.response.speak(this.attributes.speechOutput).listen(this.attributes.repromptSpeech);
@@ -28,16 +30,16 @@ const handlers = {
         this.emit(':responseReady');
     },
     'GetPrice': function() {
-        console.log('======================== GetPrice', this.event.request.intent.slots.cointype)
-        if( !this.event.request.intent.slots.cointype.value ) this.emit('AMAZON.HelpIntent')
+        console.log('======================== GetPrice', this.event.request.intent.slots.cointype);
+        if( !this.event.request.intent.slots.cointype.value ) this.emit('AMAZON.HelpIntent');
         let slot = this.event.request.intent.slots.cointype.value.toLowerCase();
         let sym, name;
         if (coins.syms.indexOf(slot) !== -1) {
             sym = slot;
-            name = coins.name[ coins.syms.indexOf(slot) ]
+            name = coins.name[ coins.syms.indexOf(slot) ];
         } else if (coins.name.indexOf(slot) !== -1) {
             name = slot;
-            sym = coins.syms[coins.name.indexOf(slot)]
+            sym = coins.syms[coins.name.indexOf(slot)];
         } else this.emit('WrongCoin');
         fetchPrice(sym).then((d) => {
             this.attributes.speechOutput = `The price of ${name} is $${d.USD}`;
@@ -51,14 +53,14 @@ const handlers = {
                 // }
             );
             this.emit(':responseReady');
-        })
+        });
     },
     'WrongCoin': function() {
         this.response.speak("Coin " + this.event.request.intent.slots.cointype.value + " does not exist in my database! please try a different coin!").listen();
         this.emit(':responseReady');
     },
     'Unhandled': function() {
-        console.log('======================== Unhandled')
+        console.log('======================== Unhandled');
         this.attributes.unrecognizedSpeech = unrecognisedResponses[randomInRange(0, unrecognisedResponses.length)];
         this.response.speak(this.attributes.unrecognizedSpeech).listen(this.attributes.repromptSpeech);
         this.emit('RepromptRequest');
@@ -80,19 +82,19 @@ const fetchPrice = function(coin) {
     return new Promise(function(resolve, reject) {
         https.get(`https://min-api.cryptocompare.com/data/price?fsym=${coin.toUpperCase()}&tsyms=USD`, (res) => {
             let rawData = "";
-        res.on('data', (chunk) => { rawData += chunk })
+        res.on('data', (chunk) => { rawData += chunk; });
         res.on('end', () => {
-            resolve( JSON.parse(rawData) )
-    })
+            resolve( JSON.parse(rawData) );
+    });
     }).on('error', (e) => {
-            reject(e)
+            reject(e);
         });
         // post_req.end();
-    })
-}
+    });
+};
 const randomInRange = function(min, max) {
     return Math.floor((Math.random() * (max - min) + min));
-}
+};
 exports.handler = function(event, context) {
     const alexa = Alexa.handler(event, context);
     alexa.APP_ID = APP_ID;
