@@ -1,8 +1,36 @@
 {
-  "name": "crypto-machine-alexa-skill",
+  "name": "crypto-currency-alexa-skill",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "alexa-sdk": "^1.0.10"
+    "alexa-sdk": "^1.0.14"
+  },
+  "description": "An alexa skill for cryptocurrency!",
+  "main": "index.js",
+  "scripts": {
+    "test": "./node_modules/jshint/bin/jshint index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mim-Armand/CryptoMachine-Alexa-Skill.git"
+  },
+  "keywords": [
+    "alexa",
+    "skill",
+    "cryptocurrency",
+    "bitcoin",
+    "ethereum",
+    "cryptocompare",
+    "coinbase",
+    "mim",
+    "Armand"
+  ],
+  "author": "mim.Armand",
+  "bugs": {
+    "url": "https://github.com/mim-Armand/CryptoMachine-Alexa-Skill/issues"
+  },
+  "homepage": "https://github.com/mim-Armand/CryptoMachine-Alexa-Skill#readme",
+  "devDependencies": {
+    "jshint": "^2.9.5"
   }
 }

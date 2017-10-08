@@ -1,186 +1,105 @@
 /* eslint-disable  func-names */
 /* eslint quote-props: ["error", "consistent"]*/
-
+/* jshint node: true */
+/*jshint esversion: 6 */
+// We can use either of the following APIs:
+// https://coinmarketcap.com/api/
+// https://www.cryptonator.com/api/
+// https://www.cryptocompare.com/api
 'use strict';
-
 const Alexa = require('alexa-sdk');
 const https = require('https');
+const coins = require('./coins');
+const helloMessages = require('./msg_greetings').messages;
+const reprompMessages = require('./msg_reprompt').messages;
+const unrecognisedResponses = require('./msg_unrecognized').messages;
 
-const languageStrings = {
-    'en': {
-        translation: {
-            SKILL_NAME: 'Crypto Machine',
-            GET_ALL_PRICES_MESSAGE: "The prices are as follow: ",
-            HELP_MESSAGE: 'Ask me for the prices of all currencies or one of them!',
-            HELP_REPROMPT: 'What can I help you with?',
-            STOP_MESSAGE: 'Goodbye!',
-        },
-    },
-};
-
-
-const TestResponse = {
-  "version": "1.0",
-  "response": {
-    "outputSpeech": {
-      "type": "PlainText",
-      "text": "Error! ",
-    },
-    "card": {
-      "type": "Standard",
-      "title": "Crypto Machine!",
-      "content": "string",
-      "text": "Error! ",
-      "image": {
-        "smallImageUrl": "https://s3.amazonaws.com/cryptomachine/mim-btc-coinbase-wallet.png",
-        "largeImageUrl": "https://s3.amazonaws.com/cryptomachine/mim-btc-coinbase-wallet.png"
-      }
-    },
-    "shouldEndSession": true
-  }
-}
-
-
-const APP_ID = 'amzn1.ask.skill.239cad52-325b-4141-aa6e-a3923ebd7f65';
-
-let hello_message = ''
-
+const APP_ID = process.env.APP_ID;
+let hello_message = '';
 const handlers = {
-    'LaunchRequest': function () {
-        console.log('======================== LaunchRequest')
-        hello_message = 'Hi, here is a quick briefing of the market: '
-        this.emit('GetPricesAll');
+    'LaunchRequest': function() {
+        console.log('======================== LaunchRequest');
+        this.attributes.speechOutput = helloMessages[randomInRange(0, helloMessages.length)];
+        this.attributes.repromptSpeech = reprompMessages[randomInRange(0, reprompMessages.length)];
+        this.response.speak(this.attributes.speechOutput).listen(this.attributes.repromptSpeech);
+        this.emit(':responseReady');
     },
-    'GetPricesAll': function () {
-        console.log('======================== GetPricesAll')
-        TestResponse.response.outputSpeech.text = hello_message;
+    'RepromptRequest': function() {
+        this.attributes.repromptSpeech = reprompMessages[randomInRange(0, reprompMessages.length)];
+        this.response.speak(this.attributes.repromptSpeech).listen(this.attributes.repromptSpeech);
+        this.emit(':responseReady');
     },
-    'Unhandled': function () {
-        console.log('======================== Unhandled')
-        this.emit('GetPricesAll');
+    'GetPrice': function() {
+        console.log('======================== GetPrice', this.event.request.intent.slots.cointype);
+        if( !this.event.request.intent.slots.cointype.value ) this.emit('AMAZON.HelpIntent');
+        let slot = this.event.request.intent.slots.cointype.value.toLowerCase();
+        let sym, name;
+        if (coins.syms.indexOf(slot) !== -1) {
+            sym = slot;
+            name = coins.name[ coins.syms.indexOf(slot) ];
+        } else if (coins.name.indexOf(slot) !== -1) {
+            name = slot;
+            sym = coins.syms[coins.name.indexOf(slot)];
+        } else this.emit('WrongCoin');
+        fetchPrice(sym).then((d) => {
+            this.attributes.speechOutput = `The price of ${name} is $${d.USD}`;
+            this.response.speak(this.attributes.speechOutput);
+            this.response.cardRenderer(
+                `${sym.toUpperCase()}. © mim.Armand`,
+                ` ${name.charAt(0).toUpperCase()}${name.slice(1)} (${sym.toUpperCase()}) : $${d.USD}`
+                // {
+                //     smallImageUrl: `https://www.cryptocompare.com/media/${coins.imgs[ coins.syms.indexOf(sym) ]}`,
+                //     largeImageUrl: `https://www.cryptocompare.com/media/${coins.imgs[ coins.syms.indexOf(sym) ]}`
+                // }
+            );
+            this.emit(':responseReady');
+        });
     },
-    'AMAZON.HelpIntent': function () {
-        const speechOutput = this.t('HELP_MESSAGE');
-        const reprompt = this.t('HELP_MESSAGE');
+    'WrongCoin': function() {
+        this.response.speak("Coin " + this.event.request.intent.slots.cointype.value + " does not exist in my database! please try a different coin!").listen();
+        this.emit(':responseReady');
+    },
+    'Unhandled': function() {
+        console.log('======================== Unhandled');
+        this.attributes.unrecognizedSpeech = unrecognisedResponses[randomInRange(0, unrecognisedResponses.length)];
+        this.response.speak(this.attributes.unrecognizedSpeech).listen(this.attributes.repromptSpeech);
+        this.emit('RepromptRequest');
+    },
+    'AMAZON.HelpIntent': function() {
+        const speechOutput = "Ask me for the price of a cryptocurrency coin, like Bitcoin or Ethereum!";
+        const reprompt = "Ask something like: what is the price of Ethereum?!";
         this.emit(':ask', speechOutput, reprompt);
     },
-    'AMAZON.CancelIntent': function () {
-        this.emit(':tell', this.t('STOP_MESSAGE'));
+    'AMAZON.CancelIntent': function() {
+        this.emit(':tell', "Cool!");
     },
-    'AMAZON.StopIntent': function () {
+    'AMAZON.StopIntent': function() {
         hello_message = '';
-        this.emit(':tell', this.t('STOP_MESSAGE'));
+        this.emit(':tell', "See ya!");
     },
 };
-
-
-const SupportedCoins = [ 'BTC' , 'ETH', 'LTC' ]
-
-const SupportedCoinsNames = [ 'BitCoin', 'Ethereum', 'LiteCoin']
-
-const fetchPrice = function ( coin, index, callback ){
-    let req_options = { 
-            host:  'api.coinbase.com', 
-            path: '/v2/prices/'+ coin +'-USD/spot', 
-            port: 443,
-            method: 'GET'};
-    var post_req = https.request(req_options, function(res) { 
-            res.setEncoding('utf8'); 
-            var returnData = ""; 
-            res.on('data', function (chunk) { 
-                returnData += chunk; 
-            }); 
-            res.on('end', function () {
-                callback( JSON.parse(returnData).data, index )
-            }); 
-           });
-                 post_req.end();
-}
-
-const fetchPrices = function (event, context){
-    hello_message = '';
-    if( !event.request.intent ) event.request.intent = {name: 'GetPricesAll'}
-    let requestedCoins = [];
-    switch ( event.request.intent.name ){
-        case 'GetPricesAll':
-        console.log(" ------> Get ALL Prices <--------- ")
-            requestedCoins = SupportedCoins;
-        break;
-        case 'GetPrice':
-            let _coinType = (event.request.intent.slots.Coin_Type.value).toUpperCase();
-
-            _coinType = (_coinType == 'BITCOIN' || _coinType == 'BIT-COIN') ? 'BTC' : _coinType;
-            _coinType = (_coinType == 'ETHER' || _coinType == 'ETHEREUM') ? 'ETH' : _coinType;
-            _coinType = (_coinType == 'LITECOIN' || _coinType == 'LITE-COIN') ? 'LTC' : _coinType;
-
-             let all_synonyms = [ 'coins', 'everything', 'all', 'anything', 'market', 'whole' ]
-            if(all_synonyms.indexOf( _coinType.toLowerCase() ) !== -1 ) {
-                requestedCoins = SupportedCoins;
-                break;
-            }
-
-            console.log(' [ [ [ [ [ [ [ [ ', SupportedCoins.indexOf( _coinType) === -1, ' ] ] ] ] ] ] ]  ] ]')
-
-            if( SupportedCoins.indexOf( _coinType ) === -1){ // we indicate that the coin name is not valid and return all coins prices
-                TestResponse.response.outputSpeech.text += `Requested coin, ${_coinType}, was not recognized! here are the supported coins and their current valuse: `;
-                requestedCoins = SupportedCoins;
-            }else{
-                requestedCoins = [`${_coinType}`]
-            }
-            console.log('\n - - - - - - - - - - - - - - -\n')
-            console.log(_coinType)
-            console.log('\n - - - - - - - - - - - - - - -\n')
-        break;
-        fedault:
-        requestedCoins = SupportedCoins;
-        // context.succeed('default!')
-    }
-
-    let responses = [];
-    let counter = 0;
-
-    for (var i = 0; i < requestedCoins.length; i ++ ) {
-        fetchPrice( 
-            requestedCoins[i],
-            i,
-            function(d, index){
-                counter++;
-                responses[ index ] = d;
-                 if (counter == requestedCoins.length ) say( context, responses, requestedCoins )
-                }
-            )
-    }
-                
-}
-
-const say = function( context, data, requestedCoins ){
-    console.log('********************* easy speak! *********************', data)
-    let responseText = "";
-    for( let i = 0; i < data.length; i ++ ){
-        let coinName = SupportedCoinsNames[ SupportedCoins.indexOf( (requestedCoins[i]).toUpperCase() ) ]
-        responseText += `The price of ${coinName} is ${data[i].amount} ${data[i].currency}! `
-    }
-    TestResponse.response.outputSpeech.text += responseText;
-    TestResponse.response.card.text = `Prices for:\n ${requestedCoins.join(" - ")} \n\r [ mim Armand ]`;
-    context.succeed(TestResponse);
-}
-
-exports.handler = function (event, context) {
-    console.log("\n=========================================\n")
-    console.log("\n=========================================\n")
-    console.log(event)
-    console.log("\n=========================================\n")
-    console.log(event.request.intent)
-    // console.log(event.request.ResolvedAnaphorList)
-    console.log("\n=========================================\n")
-    console.log("\n=========================================\n")
+const fetchPrice = function(coin) {
+    return new Promise(function(resolve, reject) {
+        https.get(`https://min-api.cryptocompare.com/data/price?fsym=${coin.toUpperCase()}&tsyms=USD`, (res) => {
+            let rawData = "";
+        res.on('data', (chunk) => { rawData += chunk; });
+        res.on('end', () => {
+            resolve( JSON.parse(rawData) );
+    });
+    }).on('error', (e) => {
+            reject(e);
+        });
+        // post_req.end();
+    });
+};
+const randomInRange = function(min, max) {
+    return Math.floor((Math.random() * (max - min) + min));
+};
+exports.handler = function(event, context) {
     const alexa = Alexa.handler(event, context);
     alexa.APP_ID = APP_ID;
     // To enable string internationalization (i18n) features, set a resources object.
-    alexa.resources = languageStrings;
+    // alexa.resources = languageStrings;
     alexa.registerHandlers(handlers);
     alexa.execute();
-
-    fetchPrices ( event, context );
-    // context.succeed(TestResponse);
 };
