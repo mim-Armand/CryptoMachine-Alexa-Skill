@@ -160,6 +160,7 @@ const say = function( context, data, requestedCoins ){
         let coinName = SupportedCoinsNames[ SupportedCoins.indexOf( (requestedCoins[i]).toUpperCase() ) ]
         responseText += `The price of ${coinName} is ${data[i].amount} ${data[i].currency}! `
     }
+    responseText += ' By the way, try our new skill called \"CryptoCurrency\" that covers more than 100 of most popular coins! Just say \"Alexa, open cryptocurrency!\"'
     TestResponse.response.outputSpeech.text += responseText;
     TestResponse.response.card.text = `Prices for:\n ${requestedCoins.join(" - ")} \n\r [ mim Armand ]`;
     context.succeed(TestResponse);
